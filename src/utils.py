@@ -280,5 +280,19 @@ def draw_raster_sample(data, samples=100, affine=None, columns=None):
     return pd.DataFrame.from_items(samples + additional)
 
 
+def confusion_matrix(label, prediction):
+    matrix = [[0, 0],
+              [0, 0]]
+
+    for l, p in zip(label, prediction):
+        if l == p:
+            matrix[l][p] += 1
+        else:
+            matrix[l][p] += 1
+
+    matrix[0][0], matrix[1][1] = matrix[1][1], matrix[0][0]
+    return matrix
+
+
 if __name__ == "__main__":
     pass
