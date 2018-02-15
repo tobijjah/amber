@@ -236,6 +236,18 @@ def ndvi(RED, NIR):
     return nd
 
 
+def bi(SWIR, RED, NIR, BLUE):
+    # TODO doc division by zero error
+    """BI = (SWIR2 + RED - NIR - BLUE) / (SWIR2 + RED + NIR + BLUE)"""
+    return (SWIR + RED - NIR - BLUE) / (SWIR + RED + NIR + BLUE)
+
+
+def ndsi(SWIR, GREEN):
+    # TODO doc division by zero error
+    """NDSI = (SWIR2 - GREEN) / (SWIR2 + GREEN)"""
+    return (SWIR - GREEN) / (SWIR + GREEN)
+
+
 def draw_raster_sample(data, samples=100, affine=None, columns=None):
     # TODO doc
     additional = []
