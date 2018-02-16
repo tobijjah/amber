@@ -239,13 +239,20 @@ def ndvi(RED, NIR):
 def bi(SWIR, RED, NIR, BLUE):
     # TODO doc division by zero error
     """BI = (SWIR2 + RED - NIR - BLUE) / (SWIR2 + RED + NIR + BLUE)"""
-    return (SWIR + RED - NIR - BLUE) / (SWIR + RED + NIR + BLUE)
+    x = (SWIR + RED) - (NIR + BLUE)
+    y = (SWIR + RED) + (NIR + BLUE)
 
+    y[y == 0.0] = 1.0
 
-def ndsi(SWIR, GREEN):
-    # TODO doc division by zero error
-    """NDSI = (SWIR2 - GREEN) / (SWIR2 + GREEN)"""
-    return (SWIR - GREEN) / (SWIR + GREEN)
+    img = x / y
+
+    img[y == 1.0] = 0.0
+
+    # clip to NDVI value range
+    img[img < -1.0] = -1.0
+    img[img > 1.0] = 1.0
+
+    return img
 
 
 def draw_raster_sample(data, samples=100, affine=None, columns=None):
