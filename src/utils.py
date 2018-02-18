@@ -116,6 +116,26 @@ def reproject_from(in_path, to_crs, out_path):
         return out_path
 
 
+def reproject_like(template, in_path, out_path: str):
+    # TODO refactor, doc
+    crs, transform, width, height = fetch_metadata(template, 'crs', 'transform', 'width', 'height')
+
+    with rasterio.open(in_path, 'r') as src:
+        out_kwargs = src.profile.copy()
+        out_kwargs.update({
+            'crs': crs,
+            'transform': transform,
+            'width': width,
+            'height': height
+        })
+
+        with rasterio.open(out_path, 'w', **out_kwargs) as dst:
+            rasterio.warp.reproject(source=rasterio.band(src, list(range(1, src.count + 1))),
+                                    destination=rasterio.band(dst, list(range(1, src.count + 1))))
+
+    return out_path
+
+
 def write(data, to_path, **kwargs):
     # TODO refactor, doc
     if len(data.shape) == 3:
@@ -144,24 +164,6 @@ def write(data, to_path, **kwargs):
     return to_path
 
 
-def l8_reflectance(img, MR, AR, SE, src_nodata=0):
-    # TODO refactor, doc
-    """
-    :param img: numpy.ndarray, source image
-    :param MR: float, Band-specific multiplicative rescaling
-    :param AR: float, Band-specific additive rescaling factor
-    :param SE: float, Local sun elevation angle in degree
-    :param src_nodata: int, optional no data value in source image
-    :return: numpy.ndarray, image converted to TOA-Reflectance
-    """
-    rf = ((MR * img.astype(np.float32)) + AR) / np.sin(SE)  # conversion to rad np.deg2rad not needed
-
-    if src_nodata is not None:
-        rf[img == src_nodata] = 0.0
-
-    return rf
-
-
 def l7_reflectance(img, ESD, SE, BAND, src_nodata=0):
     # TODO refactor, doc
     """
@@ -182,7 +184,7 @@ def l7_reflectance(img, ESD, SE, BAND, src_nodata=0):
         8: 1369,
     }
 
-    rf = (np.pi * img.astype(np.float32) * ESD**2) / (ESUN[BAND] * np.sin(SE))
+    rf = (np.pi * img.astype(np.float32) * ESD**2) / (ESUN[BAND] * np.sin(np.deg2rad(SE)))
 
     if src_nodata is not None:
         rf[img == src_nodata] = 0.0
