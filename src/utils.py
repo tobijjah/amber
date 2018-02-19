@@ -215,6 +215,30 @@ def l7_radiance(img, QCMIN, QCMAX, RMIN, RMAX, src_nodata=0):
     return rd
 
 
+def LTK_cloud_masking(red, blue, nir):
+    """
+    Pixel is classified as cloud if:
+    red > 0.15 or blue > 0.18 (part1)
+    and
+    nir > 0.12 (part2)
+    and
+    max(red, blue) > nir*0.67 (part3)
+    """
+    if len({red.shape, blue.shape, nir.shape}) > 1:
+        raise ValueError
+
+    part1 = np.logical_or(red > 0.15, blue > 0.18)
+    part2 = nir > 0.12
+    part3 = np.maximum(red, blue) > nir*0.67
+
+    mask = np.logical_and(part1, part2, part3)
+
+    cloud_mask = np.zeros(red.shape, dtype=np.uint8)
+    cloud_mask[mask] = 1
+
+    return cloud_mask
+
+
 def ndvi(RED, NIR):
     # TODO refactor, doc, division by zero prevention
     if RED.shape != NIR.shape:
