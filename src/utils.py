@@ -5,7 +5,8 @@ Author: Tobias Seydewitz
 Date: 20.10.17
 Mail: tobi.seyde@gmail.com
 
-Description:
+Description: Utility functions for the project "A case study on tree cover change from 2001 till 2013
+             driven by illegal amber mining in the upper north oblast Rivne/Ukraine"
 """
 import os
 import rasterio
@@ -20,8 +21,13 @@ RANDOM = np.random.RandomState(42)
 
 
 def get_data_dir(path):
-    # TODO refactor, doc
-    """"""
+    """
+    Recurse a directory and get all child directories paths as Path
+    objects organized in a named tuple data structure.
+
+    :param path: absolute path to directory to recurse
+    :return: named tuple with directory names as key and a Path object as value
+    """
     dir_structure = {
         os.path.split(root)[-1]: Path(root)
         for root, *_ in os.walk(path)
@@ -32,8 +38,12 @@ def get_data_dir(path):
 
 
 def read_raster(item):
-    # TODO refactor, doc
-    """"""
+    """
+    Opens a raster file from string or Path object.
+
+    :param item: path to raster as str or Path object
+    :return: rasterio.DatasetReader
+    """
     if isinstance(item, rasterio.io.DatasetReader):
         return item
 
@@ -48,8 +58,13 @@ def read_raster(item):
 
 
 def fetch_metadata(from_path_or_reader, *args):
-    # TODO refactor, doc
-    """"""
+    """
+    Fetches multiple metadata attributes from a raster image.
+
+    :param from_path_or_reader: string, Path to raster image or a opened rasterio.DatasetReader
+    :param args: metadata keys to fetch e.g. bounds, transform, crs etc.
+    :return: metadata values
+    """
     reader = read_raster(from_path_or_reader)
 
     values = []
@@ -69,9 +84,15 @@ def fetch_metadata(from_path_or_reader, *args):
     return values[0]
 
 
-def clip_raster(raster, dst_bounds):
-    # TODO refactor, doc
-    src = read_raster(raster)
+def clip_raster(from_path_or_reader, dst_bounds):
+    """
+    Clips a raster image to target bounds.
+
+    :param from_path_or_reader: string, Path to raster image or a opened rasterio.DatasetReader
+    :param dst_bounds: target bounds left, bottom, right and top
+    :return: clipped raster data and affine matrix
+    """
+    src = read_raster(from_path_or_reader)
     src_bounds = src.bounds
 
     if rasterio.coords.disjoint_bounds(src_bounds, dst_bounds):
@@ -88,7 +109,14 @@ def clip_raster(raster, dst_bounds):
 
 
 def reproject_from(in_path, to_crs, out_path):
-    # TODO refactor, doc
+    """
+    Reprojection of raster image to target coordinate reference system.
+
+    :param in_path: absolute path to raster image as string
+    :param to_crs: target coordinate reference system as pyproj dictionary
+    :param out_path: image save path
+    :return: save path as string
+    """
     with rasterio.open(in_path, 'r') as src:
         affine, width, height = rasterio.warp.calculate_default_transform(
             src_crs=src.crs,
@@ -117,7 +145,16 @@ def reproject_from(in_path, to_crs, out_path):
 
 
 def reproject_like(template, in_path, out_path: str):
-    # TODO refactor, doc
+    """
+    Reprojection of a raster image like a template raster image.
+    After, reprojected raster has same extent, bounds, resolution and crs
+    like template raster.
+
+    :param template: path to template raster as string, Path object or rasterio.DatasetReader
+    :param in_path: path to raster image to reproject
+    :param out_path: save path as string
+    :return: save path as string
+    """
     crs, transform, width, height = fetch_metadata(template, 'crs', 'transform', 'width', 'height')
 
     with rasterio.open(in_path, 'r') as src:
@@ -137,7 +174,14 @@ def reproject_like(template, in_path, out_path: str):
 
 
 def write(data, to_path, **kwargs):
-    # TODO refactor, doc
+    """
+    Creates a raster image from a 2 or 3-dimensional numpy array.
+
+    :param data: numpy.array
+    :param to_path: save path as string
+    :param kwargs: Please, consider rasterio documentation for a full list of valid of keyword arguments
+    :return: save path as string
+    """
     if len(data.shape) == 3:
         idx, height, width = data.shape  # z, y, x
 
@@ -164,17 +208,20 @@ def write(data, to_path, **kwargs):
     return to_path
 
 
-def l7_reflectance(img, ESD, SE, BAND, src_nodata=0):
-    # TODO refactor, doc
+def l7_reflectance(img, esd, se, band, src_nodata=0):
     """
-    :param img:
-    :param ESD:
-    :param SE:
-    :param BAND:
-    :param src_nodata:
-    :return:
+    Converts Landsat 7 TOA-Rad image data to Top of Atmosphere Reflectance (TOA-Ref).
+    Source: https://landsat.usgs.gov/landsat-7-data-users-handbook-section-5
+
+    :param img: radiance image data as numpy.array
+    :param esd: numeric, estimated earth sun distance
+    :param se: numeric, sun elevation in degrees
+    :param band: band index e.g. blue = 1
+    :param src_nodata: numeric, no data value in source image
+    :return: image data converted to TOA-Ref
     """
-    ESUN = {
+    # mean solar exo-atmospheric irradiances constants see source
+    esun = {
         1: 1970.0,
         2: 1842.0,
         3: 1547.0,
@@ -184,45 +231,52 @@ def l7_reflectance(img, ESD, SE, BAND, src_nodata=0):
         8: 1369,
     }
 
-    rf = (np.pi * img.astype(np.float32) * ESD**2) / (ESUN[BAND] * np.sin(np.deg2rad(SE)))
+    reflectance = (np.pi * img.astype(np.float32) * esd ** 2) / (esun[band] * np.sin(np.deg2rad(se)))
 
     if src_nodata is not None:
-        rf[img == src_nodata] = 0.0
+        reflectance[img == src_nodata] = 0.0
 
     # clip
-    rf[rf < 0.0] = 0.0
-    rf[rf > 1.0] = 1.0
+    reflectance[reflectance < 0.0] = 0.0
+    reflectance[reflectance > 1.0] = 1.0
 
-    return rf
+    return reflectance
 
 
-def l7_radiance(img, QCMIN, QCMAX, RMIN, RMAX, src_nodata=0):
-    # TODO doc, refactor
+def l7_radiance(img, qcmin, qcmax, rmin, rmax, src_nodata=0):
     """
-    :param img:
-    :param QCMIN:
-    :param QCMAX:
-    :param RMIN:
-    :param RMAX:
-    :param src_nodata:
-    :return:
+    Converts Landsat 7 quantized pixel (DN) image data to Top of Atmosphere Reflectance (TOA-Rad).
+    Source: https://landsat.usgs.gov/landsat-7-data-users-handbook-section-5
+
+    :param img: quantized pixel image data as numpy.array
+    :param qcmin: numeric, Minimum quantized calibrated pixel value
+    :param qcmax: numeric, Maximum quantized calibrated pixel value
+    :param rmin: numeric, Minimum spectral radiance
+    :param rmax: numeric, Maximum spectral radiance
+    :param src_nodata: numeric, no data value in source image
+    :return: image data converted to TOA-Rad
     """
-    rd = ((RMAX - RMIN) / (QCMAX - QCMIN)) * (img.astype(np.float32) - QCMIN) + RMIN
+    radiance = ((rmax - rmin) / (qcmax - qcmin)) * (img.astype(np.float32) - qcmin) + rmin
 
     if src_nodata is not None:
-        rd[img == src_nodata] = 0.0
+        radiance[img == src_nodata] = 0.0
 
-    return rd
+    return radiance
 
 
-def LTK_cloud_masking(red, blue, nir):
+def ltk_cloud_masking(red, blue, nir):
     """
-    Pixel is classified as cloud if:
-    red > 0.15 or blue > 0.18 (part1)
-    and
-    nir > 0.12 (part2)
-    and
-    max(red, blue) > nir*0.67 (part3)
+    Creates a cloud mask for a Landsat 7 scene with the Luo–Trishchenko–Khlopenkov
+    algorithm.
+
+    Source: Oreopoulos et al., "Implementation on Landsat Data of a Simple
+    Cloud-Mask Algorithm Developed for MODIS Land Bands", IEEE Geoscience
+    and Remote Sensing Letters, vol. 8, number 4, 2011
+
+    :param red: numpy.array, TOA-Ref image data of red band
+    :param blue: numpy.array, TOA-Ref image data of blue band
+    :param nir: numpy.array, TOA-Ref image data of near infrared band
+    :return: cloud mask as numpy.array
     """
     if len({red.shape, blue.shape, nir.shape}) > 1:
         raise ValueError
@@ -239,42 +293,65 @@ def LTK_cloud_masking(red, blue, nir):
     return cloud_mask
 
 
-def ndvi(RED, NIR):
-    # TODO refactor, doc, division by zero prevention
-    if RED.shape != NIR.shape:
+def ndvi(red, nir):
+    """
+    Computes the normalized difference vegetation index for a
+    Landsat scene.
+
+    :param red: numpy.array, red band of a landsat scene
+    :param nir: numpy.array, nir band of a landsat scene
+    :return: ndvi as numpy.array
+    """
+    if red.shape != nir.shape:
         raise AttributeError('No equal shape')
 
-    x = NIR - RED
-    y = NIR + RED
+    # vegetation index components
+    x = nir - red
+    y = nir + red
 
     # avoid division by zero error
     y[y == 0.0] = 1.0
 
     # NDVI (NIR - RED) / (NIR + RED)
-    nd = x / y
-
-    nd[y == 1.0] = 0.0
-
-    # clip to NDVI value range
-    nd[nd < -1.0] = -1.0
-    nd[nd > 1.0] = 1.0
-
-    return nd
-
-
-def bi(SWIR, RED, NIR, BLUE):
-    # TODO doc division by zero error
-    """BI = (SWIR2 + RED - NIR - BLUE) / (SWIR2 + RED + NIR + BLUE)"""
-    x = (SWIR + RED) - (NIR + BLUE)
-    y = (SWIR + RED) + (NIR + BLUE)
-
-    y[y == 0.0] = 1.0
-
     img = x / y
 
     img[y == 1.0] = 0.0
 
-    # clip to NDVI value range
+    # clip range to normal difference
+    img[img < -1.0] = -1.0
+    img[img > 1.0] = 1.0
+
+    return img
+
+
+def ndbi(swir, red, nir, blue):
+    """
+    Converts the swir, red, nir and blue band of Landsat scene to a
+    normalized difference bareness index.
+
+    Source: Zao and Chen, "Use of Normalized Difference Bareness Index
+    in Quickly Mapping Bare from TM/ETM+", IEEE Conference Paper, 2005
+    DOI: 10.1109/IGARSS.2005.1526319
+
+    :param swir: numpy.array, shortwave infrared band
+    :param red: numpy.array, red band
+    :param nir: numpy.array, near infrared band
+    :param blue: numpy.array, blue band
+    :return: normal difference bareness index
+    """
+    # bareness index components
+    x = (swir + red) - (nir + blue)
+    y = (swir + red) + (nir + blue)
+
+    # prevent division by zero error
+    y[y == 0.0] = 1.0
+
+    # bareness index
+    img = x / y
+
+    img[y == 1.0] = 0.0
+
+    # clip range to normal difference
     img[img < -1.0] = -1.0
     img[img > 1.0] = 1.0
 
@@ -282,7 +359,17 @@ def bi(SWIR, RED, NIR, BLUE):
 
 
 def draw_raster_sample(data, samples=100, affine=None, columns=None):
-    # TODO doc
+    """
+    Draws a random number of samples from a 2- or 3 dimensional numpy.array and
+    returns them as a pandas.DataFrame. If a affine matrix is provided the DataFrame
+    contains the real world coordinates of the samples.
+
+    :param data: numpy.array, pixel data from a raster image
+    :param samples: int, number of samples to draw
+    :param affine: affine matrix
+    :param columns: list of string, naming of sample columns length must be equal to number of bands
+    :return: raster samples as pandas.DataFrame
+    """
     additional = []
 
     if len(data.shape) == 3:
@@ -326,6 +413,13 @@ def draw_raster_sample(data, samples=100, affine=None, columns=None):
 
 
 def confusion_matrix(label, prediction):
+    """
+    Creates a confusion matrix for a binary classification.
+
+    :param label: list of int, binary class labels
+    :param prediction: list of int, predicted class frequency for binary labels
+    :return: 2D list respectively confusion matrix
+    """
     matrix = [[0, 0],
               [0, 0]]
 
@@ -337,7 +431,3 @@ def confusion_matrix(label, prediction):
 
     matrix[0][0], matrix[1][1] = matrix[1][1], matrix[0][0]
     return matrix
-
-
-if __name__ == "__main__":
-    pass
