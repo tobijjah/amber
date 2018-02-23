@@ -1,0 +1,10 @@
+GDAL
+numpy
+bokeh
+pandas
+shapely
+jupyter
+rasterio
+geopandas
+scikit-learn
+jupyter_contrib_nbextensions
